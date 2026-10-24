@@ -1,7 +1,7 @@
 
-# Stock Sense — AI-Powered Supermarket Stock Management System
+# AI-Powered Supermarket Stock Management System
 
-Stock Sense is a supermarket stock management web application designed to help supermarket owners manage products, monitor inventory, analyze sales, and generate reports. It combines a web-based dashboard with an AI assistant to make stock and sales information easier to understand.
+AI-Powered Supermarket Stock Management System is a supermarket stock management web application designed to help supermarket owners manage products, monitor inventory, analyze sales, and generate reports. It combines a web-based dashboard with an AI assistant to make stock and sales information easier to understand.
 
 The system uses Python and Flask for the backend, MongoDB for data storage, Ollama for local AI model execution, and HTML, CSS, and JavaScript for the frontend.
 
