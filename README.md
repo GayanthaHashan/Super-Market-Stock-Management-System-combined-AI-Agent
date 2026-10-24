@@ -1,22 +1,22 @@
 
 # AI-Powered Supermarket Stock Management System
 
-AI-Powered Supermarket Stock Management System is a supermarket stock management web application designed to help supermarket owners manage products, monitor inventory, analyze sales, and generate reports. It combines a web-based dashboard with an AI assistant to make stock and sales information easier to understand.
+An AI-powered web application designed to help supermarket owners manage inventory, monitor product availability, analyze sales data, and generate reports. The system combines a web-based dashboard with an AI assistant to make stock management and business analysis easier.
 
-The system uses Python and Flask for the backend, MongoDB for data storage, Ollama for local AI model execution, and HTML, CSS, and JavaScript for the frontend.
+The application uses Python and Flask for the backend, MongoDB for data storage, Ollama for local AI model execution, and HTML, CSS, and JavaScript for the frontend.
 
 ## Features
 
-- **Inventory Management** — Manage supermarket products and their stock information.
-- **Stock Monitoring** — View product availability and identify stock-related issues.
-- **Sales Analysis** — Analyze sales information to support business decisions.
+- **Inventory Management** — Manage supermarket products and stock information.
+- **Stock Monitoring** — Track product availability and identify stock-related issues.
+- **Sales Analysis** — Analyze sales data to support business decisions.
 - **AI Assistant** — Ask questions about products, inventory, and sales using natural language.
-- **Dashboard** — Access important supermarket information through a web interface.
-- **PDF Reports** — Generate downloadable reports when supported by the application.
+- **Dashboard** — View important supermarket information through a web interface.
+- **PDF Reports** — Generate downloadable reports if supported by the application.
 - **Database Integration** — Store and retrieve application data using MongoDB.
-- **Responsive Interface** — Use the website on desktop and mobile screens.
+- **Responsive Interface** — Access the website on desktop and mobile screens.
 
-> Note: The available features depend on the implementation in the project source code.
+> Note: Features depend on the functionality implemented in the source code.
 
 ## Technology Stack
 
@@ -38,7 +38,7 @@ The system uses Python and Flask for the backend, MongoDB for data storage, Olla
 ## Project Structure
 
 ```text
-supermarket-agent/
+AI-Powered-Supermarket-Stock-Management-System/
 │
 ├── backend/
 │   ├── app.py
@@ -56,28 +56,28 @@ supermarket-agent/
 └── SETUP_GUIDE.md
 ```
 
-The structure above is illustrative. Your actual folders and filenames may differ.
+*This is an example structure. Your actual folders and filenames may differ.*
 
 ## Requirements
 
-Install the following before running the application:
+Before running the application, install:
 
-- Python 3.11 or 3.12 recommended
+- Python 3.11 or 3.12 (recommended)
 - Git
-- MongoDB Atlas account, or another MongoDB deployment
+- A MongoDB Atlas account or another MongoDB deployment
 - Ollama
-- An internet connection for initial installation and cloud database access
+- An internet connection for initial setup and cloud database access
 
 ## Installation and Setup
 
 ### 1. Clone the Repository
 
-```bash
-git clone https://github.com/YOUR_USERNAME/stock-sense-ai-supermarket-management.git
-cd stock-sense-ai-supermarket-management
-```
+Replace `YOUR_USERNAME` with your GitHub username.
 
-Replace `YOUR_USERNAME` with your GitHub username and use your actual repository URL.
+```bash
+git clone https://github.com/YOUR_USERNAME/AI-Powered-Supermarket-Stock-Management-System.git
+cd AI-Powered-Supermarket-Stock-Management-System
+```
 
 ### 2. Open the Backend Folder
 
@@ -86,7 +86,7 @@ Open the project in PyCharm and navigate to the backend directory.
 For Windows PowerShell:
 
 ```powershell
-cd "backend"
+cd backend
 ```
 
 ### 3. Create a Python Virtual Environment
@@ -101,7 +101,7 @@ Activate it in PowerShell:
 .\.venv\Scripts\Activate.ps1
 ```
 
-If you use Command Prompt instead:
+For Windows Command Prompt:
 
 ```bat
 .venv\Scripts\activate.bat
@@ -109,7 +109,7 @@ If you use Command Prompt instead:
 
 ### 4. Install Dependencies
 
-Make sure the virtual environment is active, then run:
+Ensure the virtual environment is activated, then run:
 
 ```bash
 python -m pip install --upgrade pip
@@ -121,13 +121,15 @@ pip install -r requirements.txt
 1. Create an account at https://www.mongodb.com/cloud/atlas.
 2. Create a MongoDB deployment.
 3. Create a database user with the permissions required by the application.
-4. Add your current public IP address under **Network Access**.
+4. Add your public IP address under **Network Access**.
 5. Select **Connect → Drivers** and copy the Python connection string.
-6. Replace the username, password, and cluster placeholders with your actual credentials.
+6. Replace the username, password, and cluster placeholders with your actual details.
 
 ### 6. Configure Environment Variables
 
-Create a file named `.env` inside the `backend` folder. Use the following as a template:
+Create a file named `.env` inside the `backend` folder.
+
+Use the following template:
 
 ```env
 MONGO_URI=mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/
@@ -137,13 +139,9 @@ CURRENCY=$
 PORT=5000
 ```
 
-Replace the MongoDB placeholders with your actual connection details.
+Replace the MongoDB placeholders with your actual connection details. URL-encode special characters in your password if necessary.
 
-If your MongoDB password contains special characters, URL-encode those characters in the connection string.
-
-Keep `.env` private. Never upload it to GitHub or share your real database credentials.
-
-Your `.env.example` file should contain only placeholder values, never real secrets.
+**Security:** Never upload your real `.env` file, database credentials, or private connection strings to GitHub. Keep `.env.example` free of real secrets.
 
 ### 7. Install and Run Ollama
 
@@ -151,35 +149,35 @@ Download Ollama from:
 
 https://ollama.com/download
 
-After installation, open a terminal and download the model:
+Download the Llama 3.2 model:
 
 ```bash
 ollama pull llama3.2
 ```
 
-Check that the model is available:
+Verify that it is installed:
 
 ```bash
 ollama list
 ```
 
-If Ollama is not already running, start its service using:
+If Ollama is not already running, start its service:
 
 ```bash
 ollama serve
 ```
 
-Keep the Ollama service running while using AI features. If your application uses a different model or AI provider, follow the corresponding configuration.
+Keep Ollama running while using the AI features. If the project uses another model or AI provider, follow the configuration specified in the source code.
 
-### 8. Start the Application
+### 8. Run the Application
 
-From the backend directory, run:
+From the backend directory, execute:
 
 ```bash
 python app.py
 ```
 
-If the application starts successfully, open the address shown in the terminal. If it uses the default Flask port, visit:
+If the application starts successfully on the default Flask port, open:
 
 http://127.0.0.1:5000
 
@@ -187,7 +185,7 @@ Keep the backend terminal open while using the application.
 
 ## Using the AI Assistant
 
-Depending on the tools implemented in the application, you may be able to ask questions such as:
+Depending on the functionality implemented in the project, example questions may include:
 
 - "Show me the current stock information for Fresh Milk."
 - "Analyze the recent sales of milk, bread, and eggs."
@@ -195,45 +193,41 @@ Depending on the tools implemented in the application, you may be able to ask qu
 - "Summarize the supermarket's sales performance."
 - "Generate a PDF report for the selected sales period."
 
-The answers depend on the information stored in the database and the capabilities implemented in the AI agent.
+The results depend on the data stored in the database and the capabilities of the AI assistant.
 
 ## Database Configuration
 
-The application is configured to use MongoDB through the `MONGO_URI` environment variable.
+The application uses the `MONGO_URI` environment variable to connect to MongoDB.
 
-The database name is configured through:
+The database name is configured using:
 
 ```env
 DB_NAME=supermarket_db
 ```
 
-Collection names, initial sample data, and automatic database initialization depend on the backend implementation. Verify these details in `app.py` before manually creating collections or importing data.
+Collection names, sample data, and automatic database initialization depend on the backend implementation. Check `app.py` before manually creating collections or importing data.
 
 ## Troubleshooting
 
 ### MongoDB Connection Error
 
-If the application reports a connection failure:
-
-- Verify that `MONGO_URI` contains the correct Atlas connection string.
+- Check that `MONGO_URI` contains the correct connection string.
 - Confirm that your IP address is allowed in MongoDB Atlas Network Access.
-- Check the database username and password.
-- Ensure special characters in the password are URL-encoded.
-- Confirm that the application loads `.env` from the backend directory.
+- Verify the database username and password.
+- URL-encode special characters in the password.
+- Ensure the application loads `.env` from the backend directory.
 
 ### Ollama or AI Model Error
 
-If the AI assistant does not respond:
-
-- Confirm Ollama is installed.
+- Confirm that Ollama is installed and running.
 - Run `ollama list` to verify that the model is available.
 - Run `ollama pull llama3.2` if the model is missing.
-- Ensure the configured model name matches the installed model.
-- Check the backend terminal for error messages.
+- Check that the configured model name matches the installed model.
+- Review the backend terminal for error messages.
 
 ### Python Module Not Found
 
-Activate the virtual environment and install the dependencies again:
+Activate the virtual environment and reinstall the required packages:
 
 ```bash
 pip install -r requirements.txt
@@ -241,42 +235,41 @@ pip install -r requirements.txt
 
 ### Port Already in Use
 
-If port 5000 is occupied, stop the other application using it or configure a different port if the application supports that setting.
+If port 5000 is already occupied, stop the application using it or configure a different port if the project supports that setting.
 
-## Security
+## Security Best Practices
 
 - Never commit `.env` or real credentials.
-- Use `.env.example` to document required configuration variables.
-- Do not publish database passwords, API keys, or private connection strings.
-- Grant the database user only the permissions it needs.
-- Restrict MongoDB Network Access instead of allowing unrestricted access where possible.
-- Rotate credentials immediately if they are accidentally exposed.
-- Do not commit virtual environments, cache files, or generated reports unnecessarily.
+- Use `.env.example` to document required environment variables.
+- Grant database users only the permissions they need.
+- Restrict MongoDB Network Access where possible.
+- Rotate credentials immediately if they are exposed.
+- Exclude virtual environments, cache files, and unnecessary generated reports from version control.
 
-## Version Control
+## Uploading Changes to GitHub
 
-To check the files Git is tracking:
+Check the files Git will track:
 
 ```bash
 git status
 ```
 
-To add and commit your project:
+Add and commit your project:
 
 ```bash
 git add .
-git commit -m "Initial Stock Sense project"
+git commit -m "Initial project setup"
 git push origin main
 ```
 
-Ensure that `.env` is ignored before committing. If it was committed previously, removing it from `.gitignore` tracking requires additional Git steps; changing `.gitignore` alone does not remove it from earlier commits.
+Ensure `.env` is ignored before committing. Adding it to `.gitignore` does not automatically remove a file that Git is already tracking.
 
 ## Future Improvements
 
-Possible improvements include:
+Potential future enhancements include:
 
 - Low-stock alerts and reorder suggestions
-- More detailed sales analytics
+- Detailed sales analytics
 - Product category and supplier management
 - Sales forecasting
 - Inventory trend visualizations
@@ -284,12 +277,12 @@ Possible improvements include:
 - User authentication and role-based access
 - Additional report formats
 
-These are potential enhancements and are not necessarily implemented in the current version.
+These are possible improvements and are not necessarily included in the current implementation.
 
 ## License
 
-No license has been specified yet. Add a `LICENSE` file if you intend to publish the project under an open-source license.
+No license has been specified yet. Add a `LICENSE` file if you intend to distribute the project under an open-source license.
 
 ---
 
-**Stock Sense** — Smarter inventory management through data and AI.
+**AI-Powered Supermarket Stock Management System** — Smarter inventory management through data and AI.
