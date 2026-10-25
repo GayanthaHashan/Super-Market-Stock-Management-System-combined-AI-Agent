@@ -804,3 +804,225 @@ def check_stock_status(status: str = "all") -> str:
         return text
     except Exception as e:
         return f"error: {e}"
+
+# sales report PDF tool
+def gather_report_data(period: str) -> dict:
+    """Collect everything the report needs from the database."""
+    start, end, label = get_date_range(period)
+    sales = get_sales(start, end)
+    units, revenue, profit = sales_totals(sales)
+    per_day = units_by_date(sales)
+    per_day_money = revenue_by_date(sales)
+
+    daily_rows = []
+    for date in list_dates(start, end):
+        daily_rows.append((date, per_day.get(date, 0), per_day_money.get(date, 0.0)))
+
+    by_product = {}
+    by_category = {}
+    for s in sales:
+        sku = s["sku"]
+        if sku not in by_product:
+            by_product[sku] = {"name": s["product_name"], "units": 0, "revenue": 0.0}
+        by_product[sku]["units"] += s["units_sold"]
+        by_product[sku]["revenue"] += s["revenue"]
+
+        category = s["category"]
+        if category not in by_category:
+            by_category[category] = {"units": 0, "revenue": 0.0}
+        by_category[category]["units"] += s["units_sold"]
+        by_category[category]["revenue"] += s["revenue"]
+
+    ranked = sorted(by_product.values(), key=lambda x: x["units"], reverse=True)
+
+    out_list = []
+    low_list = []
+    for p in db.products.find({}, {"_id": 0}):
+        state = get_status(p["stock"], p["reorder_level"])
+        if state == "Out of Stock":
+            out_list.append(p["name"])
+        elif state == "Low Stock":
+            low_list.append(f"{p['name']} ({p['stock']} left)")
+
+    return {
+        "period": period, "label": label, "start": start, "end": end,
+        "units": units, "revenue": revenue, "profit": profit,
+        "daily_rows": daily_rows, "top": ranked[:5], "bottom": ranked[-3:],
+        "categories": by_category, "out_of_stock": out_list, "low_stock": low_list,
+    }
+
+
+def report_data_to_text(data: dict) -> str:
+    """Turn the report data into text that we give to the LLM."""
+    text = f"Report: {data['label']} from {data['start']} to {data['end']}\n"
+    text += f"Total units sold: {data['units']}\n"
+    text += f"Total revenue: {money(data['revenue'])}\n"
+    text += f"Total profit: {money(data['profit'])}\n\n"
+
+    text += "Daily sales (date, units, revenue):\n"
+    for date, units, revenue in data["daily_rows"]:
+        text += f"{date}: {units} units, {money(revenue)}\n"
+
+    text += "\nTop 5 products by units:\n"
+    for item in data["top"]:
+        text += f"- {item['name']}: {item['units']} units, {money(item['revenue'])}\n"
+
+    text += "\nSlowest products:\n"
+    for item in data["bottom"]:
+        text += f"- {item['name']}: {item['units']} units\n"
+
+    text += "\nSales by category:\n"
+    for category, values in data["categories"].items():
+        text += f"- {category}: {values['units']} units, {money(values['revenue'])}\n"
+
+    text += "\nOut of stock: " + (", ".join(data["out_of_stock"]) or "none") + "\n"
+    text += "Low stock: " + (", ".join(data["low_stock"]) or "none") + "\n"
+    return text
+
+
+ANALYST_PROMPT = (
+    "You are a retail sales analyst for a small supermarket. Use ONLY the data given "
+    "by the user. Write the report analysis in plain text (no markdown symbols, no "
+    "tables) with exactly these three parts:\n"
+    "SUMMARY: 2-3 sentences about total sales and profit.\n"
+    "KEY FINDINGS: 3-4 short lines starting with '- ' about best and slowest products, "
+    "categories and daily pattern.\n"
+    "RECOMMENDATIONS: 3 short lines starting with '- ' about restocking and promotions.\n"
+    "Never invent numbers."
+)
+
+
+def write_ai_analysis(data: dict) -> str:
+    """Ask the Ollama LLM to write the analysis text of the report."""
+    try:
+        reply = llm.invoke([
+            ("system", ANALYST_PROMPT),
+            ("user", report_data_to_text(data)),
+        ])
+        return reply.content
+    except Exception as e:
+        return (f"The AI analysis could not be created ({e}). "
+                "The tables in this report still contain all the data.")
+
+
+@tool
+def create_sales_report_pdf(period: str = "weekly") -> str:
+    """Create a downloadable PDF sales report for a period: 'daily', 'weekly' or 'monthly'.
+    It collects the sales data from the database, writes an AI analysis and builds the PDF.
+    Use this when the user asks for a sales report, a summary report or a PDF."""
+    try:
+        data = gather_report_data(period)
+        if data["units"] == 0:
+            return f"No sales found for {data['label']}, so no report was created."
+
+        analysis = write_ai_analysis(data)
+        filename = make_pdf(data, analysis)
+
+        text = f"REPORT_FILE: {filename}\n"
+        text += f"A PDF report was created for {data['label']} ({data['start']} to {data['end']}).\n"
+        text += f"Total units: {data['units']}, revenue {money(data['revenue'])}, profit {money(data['profit'])}.\n"
+        text += "Top product: " + data["top"][0]["name"] + f" ({data['top'][0]['units']} units).\n\n"
+        text += "AI ANALYSIS IN THE REPORT:\n" + analysis
+        return text
+    except ValueError as e:
+        return f"error: {e}"
+    except Exception as e:
+        return f"error: could not create the report ({e})"
+
+
+TOOLS = [get_product_details, analyze_products, monthly_sales_summary,
+         create_sales_report_pdf, top_selling_items, check_stock_status]
+
+
+# The PDF Maker
+ORANGE = colors.HexColor("#E8590C")
+BROWN = colors.HexColor("#4B2E1E")
+CREAM = colors.HexColor("#FFF4E6")
+
+
+def pdf_table(rows: list, widths: list) -> Table:
+    """A table with an orange header row and brown text."""
+    table = Table(rows, colWidths=widths, repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), ORANGE),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("TEXTCOLOR", (0, 1), (-1, -1), BROWN),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, CREAM]),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#E5CDB5")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    return table
+
+
+def clean_ai_text(text: str) -> str:
+    """Remove markdown symbols so the PDF looks clean."""
+    text = text.replace("**", "").replace("__", "").replace("#", "")
+    return text.strip()
+
+
+def make_pdf(data: dict, analysis: str) -> str:
+    """Build the PDF file in the reports folder and return the file name."""
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+    stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"sales_report_{data['period']}_{stamp}.pdf".replace(" ", "_")
+    path = os.path.join(REPORTS_DIR, filename)
+
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("title", parent=styles["Title"], textColor=ORANGE, fontSize=22)
+    heading = ParagraphStyle("heading", parent=styles["Heading2"], textColor=ORANGE, spaceBefore=12)
+    body = ParagraphStyle("body", parent=styles["BodyText"], textColor=BROWN, leading=14)
+
+    doc = SimpleDocTemplate(path, pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm,
+                            topMargin=2 * cm, bottomMargin=2 * cm)
+    story = []
+
+    story.append(Paragraph("Stock Sense - Sales Report", title))
+    story.append(Paragraph(f"{escape(data['label'])}: {data['start']} to {data['end']}", body))
+    story.append(Paragraph("Generated on " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), body))
+    story.append(Spacer(1, 10))
+
+    # key numbers
+    story.append(Paragraph("Key Numbers", heading))
+    story.append(pdf_table([
+        ["Units sold", "Revenue", "Profit"],
+        [str(data["units"]), money(data["revenue"]), money(data["profit"])],
+    ], [5.5 * cm, 5.5 * cm, 5.5 * cm]))
+
+    # AI analysis
+    story.append(Paragraph("AI Analysis", heading))
+    for line in clean_ai_text(analysis).split("\n"):
+        if line.strip() == "":
+            continue
+        story.append(Paragraph(escape(line.strip()), body))
+
+    # top products
+    story.append(Paragraph("Top 5 Products", heading))
+    rows = [["Rank", "Product", "Units", "Revenue"]]
+    for i, item in enumerate(data["top"]):
+        rows.append([str(i + 1), item["name"], str(item["units"]), money(item["revenue"])])
+    story.append(pdf_table(rows, [1.5 * cm, 7 * cm, 3 * cm, 5 * cm]))
+
+    # categories
+    story.append(Paragraph("Sales by Category", heading))
+    rows = [["Category", "Units", "Revenue"]]
+    for category, values in data["categories"].items():
+        rows.append([category, str(values["units"]), money(values["revenue"])])
+    story.append(pdf_table(rows, [8 * cm, 3.5 * cm, 5 * cm]))
+
+    # daily sales
+    story.append(Paragraph("Daily Sales", heading))
+    rows = [["Date", "Units", "Revenue"]]
+    for date, units, revenue in data["daily_rows"]:
+        rows.append([date, str(units), money(revenue)])
+    story.append(pdf_table(rows, [6 * cm, 4 * cm, 6.5 * cm]))
+
+    # stock alerts
+    story.append(Paragraph("Stock Alerts", heading))
+    story.append(Paragraph("<b>Out of stock:</b> " + escape(", ".join(data["out_of_stock"]) or "none"), body))
+    story.append(Paragraph("<b>Low stock:</b> " + escape(", ".join(data["low_stock"]) or "none"), body))
+
+    doc.build(story)
+    return filename
