@@ -1026,3 +1026,68 @@ def make_pdf(data: dict, analysis: str) -> str:
 
     doc.build(story)
     return filename
+
+
+#The Agent
+
+SYSTEM_PROMPT = """You are Stock Sense, the AI assistant of a small supermarket stock management system.
+You help the store manager with product details, stock levels, sales analysis and reports.
+
+Rules:
+- Use the tools to get real data from the store database. NEVER invent product names, prices, stock numbers or sales figures.
+- Choose the tool like this:
+  * details, price or "do we have X" for a product -> get_product_details
+  * analyse or compare one or more products -> analyze_products
+  * monthly sales and day-by-day performance of ONE product -> monthly_sales_summary
+  * daily, weekly or monthly sales REPORT or PDF -> create_sales_report_pdf
+  * best selling, most sold or top items -> top_selling_items
+  * what is out of stock, low stock or available -> check_stock_status
+- If a tool says a product was not found, tell the user and suggest checking the spelling.
+- For greetings and normal conversation, answer briefly without tools. If the question is not about this store, say politely that you only help with this store's stock and sales.
+- After a tool returns data, explain it clearly and completely in a friendly way. Use short paragraphs and simple lines starting with "- ". Do not use tables or markdown headings.
+- When a PDF report was created, say the report is ready and that the Download button is shown below your message. Never write file links.
+- Remember the earlier messages of this chat so follow-up questions like "what about bread?" work.
+- You can only read data. You cannot change stock or prices; tell the user to use the product screen for that.
+"""
+
+memory = MemorySaver()                            # keeps the chat history per thread_id
+agent = create_agent(llm, TOOLS, system_prompt=SYSTEM_PROMPT, checkpointer=memory)
+
+
+def ask_agent(message: str, session_id: str) -> dict:
+    """
+    Run the agent loop for one user message.
+    The loop is: model -> (wants a tool?) -> run the tool -> back to the model -> ... -> answer.
+    Returns the answer, the list of steps (the trace) and the PDF file name if one was made.
+    """
+    config = {"configurable": {"thread_id": session_id}, "recursion_limit": MAX_STEPS}
+    result = agent.invoke({"messages": [HumanMessage(message)]}, config)
+    messages = result["messages"]
+
+    # the history holds old turns too, so find where THIS turn starts
+    start = 0
+    for i, m in enumerate(messages):
+        if isinstance(m, HumanMessage):
+            start = i
+
+    steps = []
+    pdf_file = None
+    print(f"\nQ: {message}")
+    for m in messages[start + 1:]:
+        if isinstance(m, AIMessage) and m.tool_calls:
+            for call in m.tool_calls:
+                print(f"    model asked for: {call['name']}({call['args']})")
+                steps.append({"type": "call", "name": call["name"], "args": call["args"]})
+        elif isinstance(m, ToolMessage):
+            output = str(m.content)
+            print(f"    tool returned  : {output[:80]!r}")
+            steps.append({"type": "result", "name": m.name, "output": output[:400]})
+            if m.name == "create_sales_report_pdf" and output.startswith("REPORT_FILE:"):
+                pdf_file = output.split("\n")[0].replace("REPORT_FILE:", "").strip()
+
+    answer = str(messages[-1].content).strip()
+    if answer == "":
+        answer = "I collected the data but could not write the answer. Please ask again."
+    print(f"A: {answer[:120]}")
+
+    return {"answer": answer, "steps": steps, "pdf_file": pdf_file}
