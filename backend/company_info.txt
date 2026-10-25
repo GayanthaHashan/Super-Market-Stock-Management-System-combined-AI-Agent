@@ -1,0 +1,5 @@
+Company Name: Star Supermarket
+Location: No:45,Main Street,Colombo 7
+Opening Hours: 8:00 AM to 10:00 PM daily.
+Refund Policy: Items can be returned within 7 days of purchase if accompanied by a valid bill and in original condition.
+Services Offered: Groceries, household items, fresh produce, and daily essentials.
