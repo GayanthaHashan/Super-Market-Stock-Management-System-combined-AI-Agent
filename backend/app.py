@@ -929,9 +929,26 @@ def create_sales_report_pdf(period: str = "weekly") -> str:
     except Exception as e:
         return f"error: could not create the report ({e})"
 
+#company Info
+@tool
+def get_company_info(query: str = "") -> str:
+    """Read and return company information, background, services, packages,
+    or location details from the company document. Use this when the user asks
+    about the business, services, location."""
+    try:
+        file_path = os.path.join(BASE_DIR, "company_info.txt")
+        if not os.path.exists(file_path):
+            return "error: company information document is missing."
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return f"COMPANY INFORMATION:\n\n{content}"
+    except Exception as e:
+        return f"error: could not read company info ({e})"
+
 
 TOOLS = [get_product_details, analyze_products, monthly_sales_summary,
-         create_sales_report_pdf, top_selling_items, check_stock_status]
+         create_sales_report_pdf, top_selling_items, check_stock_status,get_company_info]
 
 
 # The PDF Maker
@@ -1091,6 +1108,7 @@ def ask_agent(message: str, session_id: str) -> dict:
     print(f"A: {answer[:120]}")
 
     return {"answer": answer, "steps": steps, "pdf_file": pdf_file}
+
 
 #Web API Connnections
 
@@ -1393,3 +1411,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
