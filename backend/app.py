@@ -537,3 +537,172 @@ def get_product_details(product_name: str) -> str:
         return text
     except Exception as e:
         return f"error: {e}"
+
+# analyse one or more products
+@tool
+def analyze_products(product_names: str, days: int = 30) -> str:
+    """Analyse the current stock and the sales performance of one or more products
+    over the last N days (1 to 60, default 30). product_names is a comma separated
+    list, for example 'milk, bread, eggs'. Use this when the user asks for an analysis,
+    performance check or comparison of products."""
+    try:
+        if not product_names or product_names.strip() == "":
+            return "error: please give at least one product name."
+        if days < 1 or days > HISTORY_DAYS:
+            return f"error: days must be between 1 and {HISTORY_DAYS}."
+
+        end = datetime.date.today().isoformat()
+        start = (datetime.date.today() - datetime.timedelta(days=days - 1)).isoformat()
+        dates = list_dates(start, end)
+        middle = len(dates) // 2
+
+        names = product_names.replace(" and ", ",").split(",")
+        text = f"PRODUCT ANALYSIS for the last {days} days ({start} to {end})\n\n"
+
+        for name in names:
+            if name.strip() == "":
+                continue
+            found = find_products(name, limit=1)
+            if len(found) == 0:
+                text += f"'{name.strip()}': product not found.\n\n"
+                continue
+
+            p = add_status(found[0])
+            sales = get_sales(start, end, p["sku"])
+            units, revenue, profit = sales_totals(sales)
+            per_day = units_by_date(sales)
+
+            first_half = 0
+            second_half = 0
+            best_date = None
+            best_units = 0
+            for i, date in enumerate(dates):
+                u = per_day.get(date, 0)
+                if i < middle:
+                    first_half += u
+                else:
+                    second_half += u
+                if u > best_units:
+                    best_units = u
+                    best_date = date
+
+            average = units / days
+            if average > 0:
+                cover = f"{p['stock'] / average:.1f} days of stock left at this speed"
+            else:
+                cover = "no sales, so stock cover cannot be calculated"
+
+            text += f"{p['name']} ({p['sku']}, {p['category']})\n"
+            text += f"- Current stock: {p['stock']} units ({p['status']}), reorder level {p['reorder_level']}\n"
+            text += f"- Price: {money(p['price'])}, profit margin {(p['price'] - p['cost_price']) / p['price'] * 100:.0f}%\n"
+            text += f"- Units sold: {units}, revenue {money(revenue)}, profit {money(profit)}\n"
+            text += f"- Average per day: {average:.1f} units\n"
+            if best_date:
+                text += f"- Best day: {best_date} ({best_units} units)\n"
+            text += f"- Trend: {trend_text(first_half, second_half)}\n"
+            text += f"- Stock cover: {cover}\n\n"
+
+        return text
+    except Exception as e:
+        return f"error: {e}"
+
+
+# monthly sales summary of ONE product tool
+@tool
+def monthly_sales_summary(product_name: str) -> str:
+    """Calculate the full sales of ONE product for the last 30 days and show how the
+    product performed in the market on each day of the month (day-by-day table, best
+    and worst days, weekly totals, ranking among all products).
+    Use this when the user asks for the monthly sales or monthly performance of a product."""
+    try:
+        if not product_name or product_name.strip() == "":
+            return "error: please give a product name."
+        found = find_products(product_name, limit=1)
+        if len(found) == 0:
+            return f"No product found matching '{product_name}'."
+
+        p = add_status(found[0])
+        start, end, label = get_date_range("monthly")
+        dates = list_dates(start, end)
+
+        # sales of this product
+        sales = get_sales(start, end, p["sku"])
+        units, revenue, profit = sales_totals(sales)
+        per_day = units_by_date(sales)
+        per_day_money = revenue_by_date(sales)
+
+        # best day, slowest day, weekday vs weekend
+        best_date = dates[0]
+        worst_date = dates[0]
+        weekday_total = 0
+        weekday_count = 0
+        weekend_total = 0
+        weekend_count = 0
+        for date in dates:
+            u = per_day.get(date, 0)
+            if u > per_day.get(best_date, 0):
+                best_date = date
+            if u < per_day.get(worst_date, 0):
+                worst_date = date
+            if datetime.date.fromisoformat(date).weekday() >= 5:
+                weekend_total += u
+                weekend_count += 1
+            else:
+                weekday_total += u
+                weekday_count += 1
+
+        # market position: compare with all the other products
+        all_sales = get_sales(start, end)
+        totals = {}
+        category_totals = {}
+        for s in all_sales:
+            totals[s["sku"]] = totals.get(s["sku"], 0) + s["units_sold"]
+        ranking = sorted(totals.values(), reverse=True)
+        rank = ranking.index(units) + 1 if units in ranking else len(ranking) + 1
+
+        same_category = list(db.products.find({"category": p["category"]}, {"_id": 0}))
+        category_units = 0
+        for other in same_category:
+            category_units += totals.get(other["sku"], 0)
+        category_average = category_units / len(same_category) if same_category else 0
+        if category_average > 0:
+            difference = (units - category_average) / category_average * 100
+            position = f"{abs(difference):.0f}% {'above' if difference >= 0 else 'below'} the category average"
+        else:
+            position = "no category data"
+
+        # build the text
+        text = f"MONTHLY SALES SUMMARY: {p['name']} ({p['sku']})\n"
+        text += f"Period: {start} to {end} ({len(dates)} days)\n"
+        text += f"Total units sold: {units}\n"
+        text += f"Total revenue: {money(revenue)}\n"
+        text += f"Total profit: {money(profit)}\n"
+        text += f"Average per day: {units / len(dates):.1f} units\n"
+        text += f"Best day: {best_date} ({per_day.get(best_date, 0)} units)\n"
+        text += f"Slowest day: {worst_date} ({per_day.get(worst_date, 0)} units)\n"
+        if weekday_count > 0 and weekend_count > 0:
+            text += (f"Weekday average: {weekday_total / weekday_count:.1f} units, "
+                     f"weekend average: {weekend_total / weekend_count:.1f} units\n")
+        text += (f"Market position: rank {rank} of {len(ranking)} selling products by units, "
+                 f"{position} ({p['category']}, average {category_average:.0f} units per product)\n")
+        text += f"Current stock: {p['stock']} units ({p['status']})\n\n"
+
+        text += "Weekly totals:\n"
+        week_number = 1
+        for i in range(0, len(dates), 7):
+            chunk = dates[i:i + 7]
+            week_units = 0
+            week_money = 0.0
+            for date in chunk:
+                week_units += per_day.get(date, 0)
+                week_money += per_day_money.get(date, 0)
+            text += f"- Week {week_number} ({chunk[0]} to {chunk[-1]}): {week_units} units, {money(week_money)}\n"
+            week_number += 1
+
+        text += "\nDay-by-day sales:\n"
+        for date in dates:
+            day_name = datetime.date.fromisoformat(date).strftime("%a")
+            text += f"{date} ({day_name}): {per_day.get(date, 0)} units, {money(per_day_money.get(date, 0))}\n"
+        return text
+    except Exception as e:
+        return f"error: {e}"
