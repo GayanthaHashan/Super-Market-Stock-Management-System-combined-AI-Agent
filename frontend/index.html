@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock Sense - Supermarket Stock Manager</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- sidebar -->
+  <aside class="sidebar card">
+    <div class="brand">
+      <span class="orb"></span>
+      <span class="brand-name">AI-Stock Management System</span>
+    </div>
+
+    <p class="nav-title">GENERAL</p>
+    <nav class="nav">
+      <button class="nav-item active" data-status="all">Dashboard</button>
+      <button class="nav-item" data-status="In Stock">In Stock</button>
+      <button class="nav-item" data-status="Low Stock">Low Stock</button>
+      <button class="nav-item" data-status="Out of Stock">Out of Stock</button>
+    </nav>
+
+    <p class="nav-title">OTHERS</p>
+    <nav class="nav">
+      <button class="nav-item" id="addProductBtn">➕ Add Product</button>
+      <button class="nav-item" id="refreshBtn">Refresh Data</button>
+      <button class="nav-item" id="newChatBtn">New Chat</button>
+    </nav>
+
+    <p class="model-note" id="modelNote"></p>
+  </aside>
+
+  <!-- middle -->
+  <main class="main">
+
+    <div class="topbar">
+      <div class="search-box card">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="searchInput" placeholder="Search products, brands or codes...">
+      </div>
+      <button class="round-btn card" id="bellBtn" title="Low and out of stock alerts">🔔<span class="badge" id="alertBadge">0</span></button>
+      <div class="round-btn card avatar">SM</div>
+    </div>
+
+    <div class="stats" id="stats">
+      <div class="stat card"><span class="stat-label">Total Products</span><span class="stat-value" id="statTotal">-</span></div>
+      <div class="stat card"><span class="stat-label">In Stock</span><span class="stat-value green" id="statIn">-</span></div>
+      <div class="stat card"><span class="stat-label">Low Stock</span><span class="stat-value amber" id="statLow">-</span></div>
+      <div class="stat card"><span class="stat-label">Out of Stock</span><span class="stat-value red" id="statOut">-</span></div>
+      <div class="stat card"><span class="stat-label">Revenue (7 days)</span><span class="stat-value" id="statRevenue">-</span></div>
+    </div>
+
+    <div class="pills" id="categoryPills"></div>
+
+    <div class="list-header">
+      <h2 id="listTitle">All Products</h2>
+      <span id="productCount"></span>
+    </div>
+
+    <div class="grid" id="productGrid"></div>
+  </main>
+
+  <!-- chat bot -->
+  <section class="chat card">
+    <div class="chat-header">
+      <span class="orb small"></span>
+      <div>
+        <strong>Stock Sense Assistant</strong>
+        <small>Powered by Ollama (local AI)</small>
+      </div>
+    </div>
+
+    <div class="chat-messages" id="chatMessages"></div>
+
+    <div class="chat-input card">
+      <input type="text" id="chatInput" placeholder="Ask Anything..." maxlength="1000">
+      <button id="sendBtn" title="Send">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+      </button>
+    </div>
+  </section>
+
+</div>
+
+<!-- popup profile -->
+<div class="modal-bg" id="detailModal">
+  <div class="modal card">
+    <button class="modal-close" data-close="detailModal">✕</button>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<!-- add and edit product -->
+<div class="modal-bg" id="formModal">
+  <div class="modal card">
+    <button class="modal-close" data-close="formModal">✕</button>
+    <h2 id="formTitle">Add Product</h2>
+    <div class="form-grid">
+      <label>Name *<input id="f_name" type="text"></label>
+      <label>Brand *<input id="f_brand" type="text"></label>
+      <label>Category *<input id="f_category" type="text" list="categoryList"></label>
+      <datalist id="categoryList"></datalist>
+      <label>Unit * (e.g. 1 kg)<input id="f_unit" type="text"></label>
+      <label>Selling price *<input id="f_price" type="number" step="0.01" min="0"></label>
+      <label>Cost price *<input id="f_cost_price" type="number" step="0.01" min="0"></label>
+      <label>Stock (units) *<input id="f_stock" type="number" min="0"></label>
+      <label>Reorder level *<input id="f_reorder_level" type="number" min="0"></label>
+      <label>Shelf life (days) *<input id="f_shelf_life_days" type="number" min="0"></label>
+      <label>Supplier<input id="f_supplier" type="text"></label>
+      <label>Origin<input id="f_origin" type="text"></label>
+      <label>Storage<input id="f_storage" type="text"></label>
+      <label>Barcode<input id="f_barcode" type="text"></label>
+      <label class="wide">Description<textarea id="f_description" rows="2"></textarea></label>
+    </div>
+    <p class="form-error" id="formError"></p>
+    <div class="modal-actions">
+      <button class="btn ghost" data-close="formModal">Cancel</button>
+      <button class="btn" id="saveProductBtn">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/script.js"></script>
+</body>
+</html>
+
