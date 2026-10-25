@@ -1355,3 +1355,41 @@ def api_chat():
 @app.route("/reports/<path:filename>")
 def download_report(filename):
     return send_from_directory(REPORTS_DIR, filename, as_attachment=True)
+
+# Start
+def check_ollama() -> None:
+    """Print a warning if Ollama is not running or the model is missing."""
+    try:
+        import ollama
+        installed = [m.model for m in ollama.list().models]
+        if not any(name.startswith(MODEL) for name in installed):
+            print(f"WARNING: model '{MODEL}' not found in Ollama. Run:  ollama pull {MODEL}")
+        else:
+            print(f"Ollama is running and model '{MODEL}' is ready.")
+    except Exception:
+        print("WARNING: cannot reach Ollama. Start it (ollama serve) before using the chat.")
+
+
+def main() -> None:
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+
+    try:
+        connect_db()
+    except Exception as e:
+        print("\nCould not connect to MongoDB:", e)
+        print("Check MONGO_URI in your .env file (see README.md).")
+        sys.exit(1)
+
+    if "--reseed" in sys.argv:
+        seed_database(force=True)
+    else:
+        seed_database()
+        top_up_sales()
+
+    check_ollama()
+    print(f"\nOpen the website:  http://127.0.0.1:{PORT}\n")
+    app.run(host="127.0.0.1", port=PORT, debug=False)
+
+
+if __name__ == "__main__":
+    main()
