@@ -506,3 +506,34 @@ def format_product(p: dict) -> str:
         f"Last restocked: {product['last_restocked']}",
     ]
     return "\n".join(lines)
+
+#The LLM
+# temperature=0 -> the same question gives the same answer
+# num_ctx=8192  -> a bigger memory window, because tool results can be long
+
+llm = ChatOllama(model=MODEL, temperature=0, num_ctx=8192)
+
+
+#Agent tools
+
+# product details tool
+@tool
+def get_product_details(product_name: str) -> str:
+    """Get the full profile and current stock status of a product from the store database.
+    Use this when the user asks about a product, for example 'tell me about milk',
+    'do we have eggs?' or 'what is the price of cola?'.
+    product_name is the product name or part of it."""
+    try:
+        if not product_name or product_name.strip() == "":
+            return "error: please give a product name."
+
+        found = find_products(product_name, limit=3)
+        if len(found) == 0:
+            return f"No product found matching '{product_name}'. Ask the user to check the spelling."
+
+        text = f"Found {len(found)} matching product(s):\n\n"
+        for p in found:
+            text += format_product(p) + "\n\n"
+        return text
+    except Exception as e:
+        return f"error: {e}"
