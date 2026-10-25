@@ -1091,3 +1091,267 @@ def ask_agent(message: str, session_id: str) -> dict:
     print(f"A: {answer[:120]}")
 
     return {"answer": answer, "steps": steps, "pdf_file": pdf_file}
+
+#Web API Connnections
+
+app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="")
+
+
+def error_response(message: str, code: int = 400):
+    #Send an error message to the website.
+    return jsonify({"error": message}), code
+
+
+def read_number(data: dict, key: str, whole: bool = False, minimum: float = 0):
+    #Read a number from the posted data. Returns (value, error_message).
+    value = data.get(key)
+    if value is None or str(value).strip() == "":
+        return None, f"{key} is required."
+    try:
+        number = int(value) if whole else float(value)
+    except (ValueError, TypeError):
+        return None, f"{key} must be a number."
+    if number < minimum:
+        return None, f"{key} cannot be less than {minimum}."
+    return number, None
+
+
+def validate_product(data: dict):
+    #Check the product form data. Returns (clean_product, error_message).
+    product = {}
+    for key in ["name", "brand", "category", "unit"]:
+        value = str(data.get(key, "")).strip()
+        if value == "":
+            return None, f"{key} is required."
+        product[key] = value
+
+    price, err = read_number(data, "price", minimum=0.01)
+    if err:
+        return None, err
+    cost, err = read_number(data, "cost_price", minimum=0)
+    if err:
+        return None, err
+    stock, err = read_number(data, "stock", whole=True, minimum=0)
+    if err:
+        return None, err
+    reorder, err = read_number(data, "reorder_level", whole=True, minimum=0)
+    if err:
+        return None, err
+    shelf, err = read_number(data, "shelf_life_days", whole=True, minimum=0)
+    if err:
+        return None, err
+    if cost > price:
+        return None, "cost_price cannot be higher than the selling price."
+
+    product["price"] = round(price, 2)
+    product["cost_price"] = round(cost, 2)
+    product["stock"] = stock
+    product["reorder_level"] = reorder
+    product["shelf_life_days"] = shelf
+    for key in ["supplier", "origin", "storage", "barcode", "description"]:
+        product[key] = str(data.get(key, "")).strip()
+    return product, None
+
+
+def next_sku() -> str:
+    #the next free product code.
+    biggest = 0
+    for p in db.products.find({}, {"sku": 1, "_id": 0}):
+        digits = re.sub(r"\D", "", p["sku"])
+        if digits and int(digits) > biggest:
+            biggest = int(digits)
+    return f"P{biggest + 1:03d}"
+
+
+@app.route("/")
+def home():
+    return send_from_directory(FRONTEND_DIR, "index.html")
+
+
+# products
+@app.route("/api/products", methods=["GET"])
+def api_list_products():
+    search = request.args.get("search", "").strip()
+    category = request.args.get("category", "").strip()
+    status = request.args.get("status", "").strip()
+
+    query = {}
+    if search:
+        pattern = re.escape(search)
+        query["$or"] = [{"name": {"$regex": pattern, "$options": "i"}},
+                        {"brand": {"$regex": pattern, "$options": "i"}},
+                        {"sku": {"$regex": pattern, "$options": "i"}}]
+    if category and category != "all":
+        query["category"] = category
+
+    products = []
+    for p in db.products.find(query, {"_id": 0}).sort("name", 1):
+        p = add_status(p)
+        if status and status != "all" and p["status"] != status:
+            continue
+        products.append(p)
+    return jsonify(products)
+
+
+@app.route("/api/products/<sku>", methods=["GET"])
+def api_get_product(sku):
+    product = db.products.find_one({"sku": sku}, {"_id": 0})
+    if product is None:
+        return error_response("Product not found.", 404)
+    return jsonify(add_status(product))
+
+
+@app.route("/api/products", methods=["POST"])
+def api_add_product():
+    data = request.get_json(silent=True) or {}
+    product, err = validate_product(data)
+    if err:
+        return error_response(err)
+
+    same_name = db.products.find_one(
+        {"name": {"$regex": f"^{re.escape(product['name'])}$", "$options": "i"}})
+    if same_name:
+        return error_response("A product with this name already exists.", 409)
+
+    if product["supplier"] == "":
+        product["supplier"] = CATEGORY_SUPPLIERS.get(product["category"], "Not set")
+    if product["barcode"] == "":
+        product["barcode"] = str(random.randint(10 ** 12, 10 ** 13 - 1))
+    today = datetime.date.today().isoformat()
+    product["sku"] = next_sku()
+    product["date_added"] = today
+    product["last_restocked"] = today
+
+    db.products.insert_one(dict(product))
+    return jsonify(add_status(product)), 201
+
+
+@app.route("/api/products/<sku>", methods=["PUT"])
+def api_update_product(sku):
+    if db.products.find_one({"sku": sku}) is None:
+        return error_response("Product not found.", 404)
+    data = request.get_json(silent=True) or {}
+    product, err = validate_product(data)
+    if err:
+        return error_response(err)
+
+    db.products.update_one({"sku": sku}, {"$set": product})
+    return jsonify(add_status(db.products.find_one({"sku": sku}, {"_id": 0})))
+
+
+@app.route("/api/products/<sku>", methods=["DELETE"])
+def api_delete_product(sku):
+    result = db.products.delete_one({"sku": sku})
+    if result.deleted_count == 0:
+        return error_response("Product not found.", 404)
+    return jsonify({"message": "Product deleted."})
+
+
+@app.route("/api/products/<sku>/restock", methods=["POST"])
+def api_restock(sku):
+    data = request.get_json(silent=True) or {}
+    quantity, err = read_number(data, "quantity", whole=True, minimum=1)
+    if err:
+        return error_response(err)
+
+    result = db.products.update_one(
+        {"sku": sku},
+        {"$inc": {"stock": quantity},
+         "$set": {"last_restocked": datetime.date.today().isoformat()}})
+    if result.matched_count == 0:
+        return error_response("Product not found.", 404)
+    return jsonify(add_status(db.products.find_one({"sku": sku}, {"_id": 0})))
+
+
+@app.route("/api/products/<sku>/sell", methods=["POST"])
+def api_sell(sku):
+    data = request.get_json(silent=True) or {}
+    quantity, err = read_number(data, "quantity", whole=True, minimum=1)
+    if err:
+        return error_response(err)
+
+    product = db.products.find_one({"sku": sku}, {"_id": 0})
+    if product is None:
+        return error_response("Product not found.", 404)
+
+    # only reduce the stock if there is enough of it
+    result = db.products.update_one({"sku": sku, "stock": {"$gte": quantity}},
+                                    {"$inc": {"stock": -quantity}})
+    if result.matched_count == 0:
+        return error_response(f"Not enough stock. Only {product['stock']} units left.")
+
+    # add the sale to today's record
+    today = datetime.date.today().isoformat()
+    db.sales.update_one(
+        {"sku": sku, "date": today},
+        {"$inc": {"units_sold": quantity,
+                  "revenue": round(quantity * product["price"], 2),
+                  "profit": round(quantity * (product["price"] - product["cost_price"]), 2)},
+         "$setOnInsert": {"product_name": product["name"], "category": product["category"]}},
+        upsert=True)
+    return jsonify(add_status(db.products.find_one({"sku": sku}, {"_id": 0})))
+
+
+# dashboard numbers
+@app.route("/api/categories", methods=["GET"])
+def api_categories():
+    return jsonify(sorted(db.products.distinct("category")))
+
+
+@app.route("/api/summary", methods=["GET"])
+def api_summary():
+    in_stock = 0
+    low_stock = 0
+    out_stock = 0
+    total = 0
+    for p in db.products.find({}, {"_id": 0}):
+        total += 1
+        state = get_status(p["stock"], p["reorder_level"])
+        if state == "In Stock":
+            in_stock += 1
+        elif state == "Low Stock":
+            low_stock += 1
+        else:
+            out_stock += 1
+
+    start, end, label = get_date_range("weekly")
+    units, revenue, profit = sales_totals(get_sales(start, end))
+    return jsonify({
+        "total": total, "in_stock": in_stock, "low_stock": low_stock,
+        "out_of_stock": out_stock, "week_revenue": revenue, "week_units": units,
+        "currency": CURRENCY, "model": MODEL,
+    })
+
+
+# chat with the agent
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    data = request.get_json(silent=True) or {}
+    message = str(data.get("message", "")).strip()
+    session_id = str(data.get("session_id", "default"))
+
+    if message == "":
+        return error_response("Please type a message.")
+    if len(message) > 1000:
+        return error_response("The message is too long (maximum 1000 characters).")
+
+    try:
+        result = ask_agent(message, session_id)
+        return jsonify(result)
+    except GraphRecursionError:
+        reply = "That request needed too many steps, so I stopped. Please ask in a simpler way."
+    except Exception as e:
+        print("Agent error:", e)
+        text = str(e).lower()
+        if "not found" in text and "model" in text:
+            reply = f"The model '{MODEL}' is not installed. Run:  ollama pull {MODEL}"
+        elif "connect" in text or "refused" in text:
+            reply = "I cannot reach Ollama. Please start Ollama (run 'ollama serve') and try again."
+        else:
+            reply = f"Sorry, something went wrong: {e}"
+    return jsonify({"answer": reply, "steps": [], "pdf_file": None, "error": True})
+
+
+@app.route("/reports/<path:filename>")
+def download_report(filename):
+    return send_from_directory(REPORTS_DIR, filename, as_attachment=True)
