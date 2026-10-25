@@ -1,0 +1,8 @@
+flask
+pymongo
+python-dotenv
+reportlab
+certifi
+langchain
+langchain-ollama
+langgraph
