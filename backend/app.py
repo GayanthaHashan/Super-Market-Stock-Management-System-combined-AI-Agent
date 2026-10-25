@@ -706,3 +706,101 @@ def monthly_sales_summary(product_name: str) -> str:
         return text
     except Exception as e:
         return f"error: {e}"
+
+
+# most sold items tool
+@tool
+def top_selling_items(period: str = "monthly", limit: int = 5) -> str:
+    """Find the most sold items in the store for a period: 'daily', 'weekly' or 'monthly'.
+    limit is how many top items to list (1 to 20). Also shows the slowest items and the
+    sales of each category. Use this when the user asks for best sellers, most sold
+    items or top products."""
+    try:
+        if limit < 1 or limit > 20:
+            return "error: limit must be between 1 and 20."
+        start, end, label = get_date_range(period)
+        sales = get_sales(start, end)
+        if len(sales) == 0:
+            return f"No sales found for {label}."
+
+        by_product = {}
+        by_category = {}
+        for s in sales:
+            sku = s["sku"]
+            if sku not in by_product:
+                by_product[sku] = {"name": s["product_name"], "category": s["category"],
+                                   "units": 0, "revenue": 0.0}
+            by_product[sku]["units"] += s["units_sold"]
+            by_product[sku]["revenue"] += s["revenue"]
+            by_category[s["category"]] = by_category.get(s["category"], 0) + s["units_sold"]
+
+        ranked = sorted(by_product.values(), key=lambda x: x["units"], reverse=True)
+        total_units, total_revenue, total_profit = sales_totals(sales)
+
+        text = f"TOP SELLING ITEMS - {label} ({start} to {end})\n"
+        text += f"Store total: {total_units} units, revenue {money(total_revenue)}, profit {money(total_profit)}\n\n"
+
+        text += f"Top {limit} by units sold:\n"
+        for i, item in enumerate(ranked[:limit]):
+            share = item["units"] / total_units * 100
+            text += (f"{i + 1}. {item['name']} ({item['category']}): {item['units']} units, "
+                     f"{money(item['revenue'])}, {share:.1f}% of all units\n")
+
+        text += "\nSlowest 3 items:\n"
+        for item in ranked[-3:]:
+            text += f"- {item['name']}: {item['units']} units\n"
+
+        text += "\nUnits sold by category:\n"
+        for category, units in sorted(by_category.items(), key=lambda x: x[1], reverse=True):
+            text += f"- {category}: {units} units\n"
+        return text
+    except ValueError as e:
+        return f"error: {e}"
+    except Exception as e:
+        return f"error: {e}"
+
+
+# stock status list tool
+@tool
+def check_stock_status(status: str = "all") -> str:
+    """List which products are available and which are not right now.
+    status can be 'out of stock', 'low stock', 'in stock' or 'all'.
+    Use this when the user asks what is out of stock, running low, or available."""
+    try:
+        s = status.strip().lower()
+        if s not in ("out of stock", "low stock", "in stock", "all", "out", "low", "in"):
+            return "error: status must be 'out of stock', 'low stock', 'in stock' or 'all'."
+
+        products = list(db.products.find({}, {"_id": 0}).sort("name", 1))
+        out_list = []
+        low_list = []
+        in_list = []
+        for p in products:
+            state = get_status(p["stock"], p["reorder_level"])
+            if state == "Out of Stock":
+                out_list.append(p)
+            elif state == "Low Stock":
+                low_list.append(p)
+            else:
+                in_list.append(p)
+
+        text = (f"STOCK OVERVIEW: {len(products)} products | {len(in_list)} in stock | "
+                f"{len(low_list)} low stock | {len(out_list)} out of stock\n\n")
+
+        if s in ("out of stock", "out", "all"):
+            text += "OUT OF STOCK (not available):\n"
+            for p in out_list:
+                text += f"- {p['name']} ({p['category']}), reorder level {p['reorder_level']}\n"
+            text += "\n"
+        if s in ("low stock", "low", "all"):
+            text += "LOW STOCK (need restocking soon):\n"
+            for p in low_list:
+                text += f"- {p['name']}: {p['stock']} left, reorder level {p['reorder_level']}\n"
+            text += "\n"
+        if s in ("in stock", "in"):
+            text += "IN STOCK (available):\n"
+            for p in in_list:
+                text += f"- {p['name']}: {p['stock']} units\n"
+        return text
+    except Exception as e:
+        return f"error: {e}"
